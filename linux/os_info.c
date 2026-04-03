@@ -265,7 +265,7 @@ void ReadOSInformations(Tuplestorestate *tupstore, TupleDesc tupdesc)
 		while (line_size >= 0)
 		{
 			if (strstr(line_buf, OS_DESC_SEARCH_TEXT) != NULL)
-				strlcpy(os_name, remove_quotes(str_trim(line_buf + strlen(OS_DESC_SEARCH_TEXT))), MAXPGPATH);
+				strlcpy(os_name, remove_quotes(str_trim(line_buf + (sizeof(OS_DESC_SEARCH_TEXT) - 1))), MAXPGPATH);
 
 			/* Free the allocated line buffer */
 			if (line_buf != NULL)
