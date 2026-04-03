@@ -14,6 +14,7 @@
 #include <sys/sysctl.h>
 #include <unistd.h>
 #include <time.h>
+#include <errno.h>
 
 #include <mach/mach.h>
 #include <mach/vm_page_size.h>
@@ -163,7 +164,9 @@ void ReadCPUMemoryByProcess(Tuplestorestate *tupstore, TupleDesc tupdesc)
 	CreateCPUMemoryList(READ_PROCESS_CPU_USAGE_FIRST_SAMPLE);
 	{
 		struct timespec ts = {0, 100000000L};
-		nanosleep(&ts, NULL);
+		struct timespec rem;
+		while (nanosleep(&ts, &rem) == -1 && errno == EINTR)
+			ts = rem;
 	}
 	/* Read the second sample for cpu and memory usage by each process */
 	total_cpu_usage_2 = find_cpu_times();

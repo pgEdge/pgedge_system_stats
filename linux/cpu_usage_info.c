@@ -12,6 +12,7 @@
 
 #include <unistd.h>
 #include <time.h>
+#include <errno.h>
 
 void ReadCPUUsageStatistics(Tuplestorestate *tupstore, TupleDesc tupdesc);
 
@@ -141,7 +142,9 @@ void ReadCPUUsageStatistics(Tuplestorestate *tupstore, TupleDesc tupdesc)
 	/* sleep for 150ms between 2 samples to find cpu usage statistics */
 	{
 		struct timespec ts = {0, 150000000L};
-		nanosleep(&ts, NULL);
+		struct timespec rem;
+		while (nanosleep(&ts, &rem) == -1 && errno == EINTR)
+			ts = rem;
 	}
 	/* Take the second sample regarding cpu usage statistics */
 	cpu_stat_information(&second_sample);
