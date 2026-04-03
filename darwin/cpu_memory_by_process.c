@@ -182,8 +182,12 @@ void ReadCPUMemoryByProcess(Tuplestorestate *tupstore, TupleDesc tupdesc)
 		memcpy(command, current->name, MAXPGPATH);
 		if (current->process_owned_by_user)
 		{
+			float elapsed_total = (float)(total_cpu_usage_2 - total_cpu_usage_1);
 			float diff_sample = (float)(current->process_cpu_sample_2 - current->process_cpu_sample_1) / 1000000000.0;
-			cpu_usage = (num_cpus) * (diff_sample) * 100 / (float) ((total_cpu_usage_2 - total_cpu_usage_1)/CLK_TCK);
+			if (elapsed_total <= 0 || (elapsed_total / CLK_TCK) == 0)
+				cpu_usage = 0;
+			else
+				cpu_usage = (num_cpus) * (diff_sample) * 100 / (float) (elapsed_total / CLK_TCK);
 			cpu_usage = (float)((int)(cpu_usage * 100 + 0.5))/100;
 			rss_memory = current->rss_memory;
 			memory_usage = (rss_memory/(float)total_memory)*100;

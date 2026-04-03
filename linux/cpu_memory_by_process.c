@@ -308,6 +308,7 @@ void ReadCPUMemoryByProcess(Tuplestorestate *tupstore, TupleDesc tupdesc)
 	int        no_processor = 0;
 	float4     cpu_usage = 0.0;
 	float4     memory_usage = 0.0;
+	float      cpu_delta = 0.0;
 	long page_size_bytes = 0;
 	long long unsigned int     total_memory;
 	long long unsigned int     rss_memory;
@@ -343,7 +344,11 @@ void ReadCPUMemoryByProcess(Tuplestorestate *tupstore, TupleDesc tupdesc)
 	{
 		process_pid = current->pid;
 		memcpy(command, current->name, MAXPGPATH);
-		cpu_usage = (no_processor) * (current->process_cpu_sample_2 - current->process_cpu_sample_1) * 100 / (float) (total_cpu_usage_2 - total_cpu_usage_1);
+		cpu_delta = (float)(total_cpu_usage_2 - total_cpu_usage_1);
+		if (cpu_delta <= 0)
+			cpu_usage = 0;
+		else
+			cpu_usage = (no_processor) * (current->process_cpu_sample_2 - current->process_cpu_sample_1) * 100 / cpu_delta;
 		rss_memory = current->rss_memory * page_size_bytes;
 		memory_usage = (rss_memory/(float)total_memory)*100;
 		running_since = current->process_up_since_seconds;
