@@ -88,19 +88,17 @@ void ReadNetworkInformations(Tuplestorestate *tupstore, TupleDesc tupdesc)
 		return;
 	}
 
-	for (int iter = 0; iter < (int)ip_addr_table->dwNumEntries; iter++)
+	for (int iter = 0, out_index = 0; iter < (int)ip_addr_table->dwNumEntries; iter++)
 	{
 		if ((ip_addr_table->table[iter].wType & MIB_IPADDR_PRIMARY) || (ip_addr_table->table[iter].wType & MIB_IPADDR_DYNAMIC))
 		{
-			int index = sizeof(IPROW) * iter;
-			int ip_index = index + sizeof(int);
 			IN_ADDR IPAddr;
 
-			int val = ip_addr_table->table[iter].dwIndex;
 			IPAddr.S_un.S_addr = (u_long)ip_addr_table->table[iter].dwAddr;
 			char *ip_val = inet_ntoa(IPAddr);
-			memcpy((ip_rows + index), (int *)&val, sizeof(int));
-			memcpy((ip_rows + ip_index), (char *)ip_val, IP_ADDR_SIZE);
+			ip_rows[out_index].indx = ip_addr_table->table[iter].dwIndex;
+			strlcpy(ip_rows[out_index].addr, ip_val, sizeof(ip_rows[out_index].addr));
+			out_index++;
 		}
 	}
 
@@ -143,12 +141,7 @@ void ReadNetworkInformations(Tuplestorestate *tupstore, TupleDesc tupdesc)
 		for (int i_index = 0; i_index < (int)if_table->dwNumEntries; i_index++)
 		{
 			MIB_IFROW *if_row = (MIB_IFROW *)& if_table->table[i_index];
-			int index = sizeof(IPROW) * o_index;
-			int ip_index = index + sizeof(int);
-
-			int val = *(int*)(ip_rows + index);
-
-			if (val == if_row->dwIndex)
+			if (ip_rows[o_index].indx == if_row->dwIndex)
 			{
 				if (if_row->dwType == IF_TYPE_ETHERNET_CSMACD ||
 					if_row->dwType == IF_TYPE_IEEE80211 ||
@@ -181,7 +174,7 @@ void ReadNetworkInformations(Tuplestorestate *tupstore, TupleDesc tupdesc)
 						free(dst);
 					}
 
-					values[Anum_net_ipv4_address] = CStringGetTextDatum((char *)(ip_rows + ip_index));
+					values[Anum_net_ipv4_address] = CStringGetTextDatum(ip_rows[o_index].addr);
 					values[Anum_net_tx_packets] = UInt64GetDatum((uint64)(if_row->dwOutUcastPkts + if_row->dwOutNUcastPkts));
 					values[Anum_net_rx_packets] = UInt64GetDatum((uint64)(if_row->dwInUcastPkts + if_row->dwInNUcastPkts));
 					values[Anum_net_tx_bytes] = UInt64GetDatum((uint64)if_row->dwOutOctets);

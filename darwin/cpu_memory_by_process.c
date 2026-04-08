@@ -13,6 +13,8 @@
 #include <sys/types.h>
 #include <sys/sysctl.h>
 #include <unistd.h>
+#include <time.h>
+#include <errno.h>
 
 #include <mach/mach.h>
 #include <mach/vm_page_size.h>
@@ -82,7 +84,7 @@ void CreateCPUMemoryList(int sample)
 
 			memset(iter, 0x00, sizeof(node_t));
 			iter->pid = proclist->kp_proc.p_pid;
-			memcpy(iter->name, proclist->kp_proc.p_comm, MAXPGPATH);
+			strlcpy(iter->name, proclist->kp_proc.p_comm, MAXPGPATH);
 			if ((ret_val <= 0) || ((unsigned long)ret_val < sizeof(pti)))
 				iter->process_owned_by_user = 0;
 			else
@@ -160,7 +162,12 @@ void ReadCPUMemoryByProcess(Tuplestorestate *tupstore, TupleDesc tupdesc)
 	total_cpu_usage_1 = find_cpu_times();
 	/* Read the first sample for cpu and memory usage by each process */
 	CreateCPUMemoryList(READ_PROCESS_CPU_USAGE_FIRST_SAMPLE);
-	usleep(100000);
+	{
+		struct timespec ts = {0, 100000000L};
+		struct timespec rem;
+		while (nanosleep(&ts, &rem) == -1 && errno == EINTR)
+			ts = rem;
+	}
 	/* Read the second sample for cpu and memory usage by each process */
 	total_cpu_usage_2 = find_cpu_times();
 	CreateCPUMemoryList(READ_PROCESS_CPU_USAGE_SECOND_SAMPLE);
@@ -175,8 +182,12 @@ void ReadCPUMemoryByProcess(Tuplestorestate *tupstore, TupleDesc tupdesc)
 		memcpy(command, current->name, MAXPGPATH);
 		if (current->process_owned_by_user)
 		{
+			float elapsed_total = (float)(total_cpu_usage_2 - total_cpu_usage_1);
 			float diff_sample = (float)(current->process_cpu_sample_2 - current->process_cpu_sample_1) / 1000000000.0;
-			cpu_usage = (num_cpus) * (diff_sample) * 100 / (float) ((total_cpu_usage_2 - total_cpu_usage_1)/CLK_TCK);
+			if (elapsed_total <= 0 || (elapsed_total / CLK_TCK) == 0)
+				cpu_usage = 0;
+			else
+				cpu_usage = (num_cpus) * (diff_sample) * 100 / (float) (elapsed_total / CLK_TCK);
 			cpu_usage = (float)((int)(cpu_usage * 100 + 0.5))/100;
 			rss_memory = current->rss_memory;
 			memory_usage = (rss_memory/(float)total_memory)*100;

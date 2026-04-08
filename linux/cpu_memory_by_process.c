@@ -13,6 +13,8 @@
 #include <sys/types.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
+#include <errno.h>
 #include <dirent.h>
 #include <ctype.h>
 #include <sys/sysinfo.h>
@@ -263,7 +265,7 @@ void ReadCPUMemoryUsage(int sample)
 			}
 
 			iter->pid = pid;
-			strncpy(iter->name, process_name, MAXPGPATH);
+			strlcpy(iter->name, process_name, MAXPGPATH);
 			iter->process_cpu_sample_1 = utime_ticks + stime_ticks;
 			iter->rss_memory = mem_rss;
 			process_up_since = (unsigned long long)((unsigned long long)sys_uptime - (process_up_since/HZ));
@@ -306,6 +308,7 @@ void ReadCPUMemoryByProcess(Tuplestorestate *tupstore, TupleDesc tupdesc)
 	int        no_processor = 0;
 	float4     cpu_usage = 0.0;
 	float4     memory_usage = 0.0;
+	float      cpu_delta = 0.0;
 	long page_size_bytes = 0;
 	long long unsigned int     total_memory;
 	long long unsigned int     rss_memory;
@@ -321,7 +324,12 @@ void ReadCPUMemoryByProcess(Tuplestorestate *tupstore, TupleDesc tupdesc)
 	total_cpu_usage_1 = ReadTotalCPUUsage();
 	/* Read the first sample for cpu and memory usage by each process */
 	ReadCPUMemoryUsage(READ_PROCESS_CPU_USAGE_FIRST_SAMPLE);
-	usleep(100000);
+	{
+		struct timespec ts = {0, 100000000L};
+		struct timespec rem;
+		while (nanosleep(&ts, &rem) == -1 && errno == EINTR)
+			ts = rem;
+	}
 	/* Read the second sample for cpu and memory usage by each process */
 	total_cpu_usage_2 = ReadTotalCPUUsage();
 	ReadCPUMemoryUsage(READ_PROCESS_CPU_USAGE_SECOND_SAMPLE);
@@ -336,7 +344,11 @@ void ReadCPUMemoryByProcess(Tuplestorestate *tupstore, TupleDesc tupdesc)
 	{
 		process_pid = current->pid;
 		memcpy(command, current->name, MAXPGPATH);
-		cpu_usage = (no_processor) * (current->process_cpu_sample_2 - current->process_cpu_sample_1) * 100 / (float) (total_cpu_usage_2 - total_cpu_usage_1);
+		cpu_delta = (float)(total_cpu_usage_2 - total_cpu_usage_1);
+		if (cpu_delta <= 0)
+			cpu_usage = 0;
+		else
+			cpu_usage = (no_processor) * (current->process_cpu_sample_2 - current->process_cpu_sample_1) * 100 / cpu_delta;
 		rss_memory = current->rss_memory * page_size_bytes;
 		memory_usage = (rss_memory/(float)total_memory)*100;
 		running_since = current->process_up_since_seconds;
